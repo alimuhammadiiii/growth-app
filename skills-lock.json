@@ -36,6 +36,12 @@
       "sourceType": "github",
       "skillPath": "skills/engineering/prototype/SKILL.md",
       "computedHash": "62979fe039ef64407b258f8824db41b9185f788638747df803032df4153c2aae"
+    },
+    "readme-authoring": {
+      "source": "pkuppens/skills",
+      "sourceType": "github",
+      "skillPath": "skills/readme-authoring/SKILL.md",
+      "computedHash": "79f7d00ce593edd4ae0059248874249a9adaa5bfb08ddec544f57a99342195f8"
     }
   }
 }
