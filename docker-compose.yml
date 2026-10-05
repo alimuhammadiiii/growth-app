@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: growth-app-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: app_password
+      POSTGRES_DB: growth_app
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+volumes:
+  postgres_data:
