@@ -1,36 +1,122 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Growth
 
-## Getting Started
+Growth is a personal growth-tracking web app. You define a **Goal**, break it into scheduled **Activities**, and record what actually happened each day — completed, partially completed, or not completed, with an optional reason. Weekly reports then show what you planned, what you did, and where your plan may be unrealistic.
 
-First, run the development server:
+It is intentionally **not a todo app**: you don't manage daily tasks by hand. The app builds the day's plan from your schedules, and your job is only to record reality.
+
+> The full domain model and business rules are defined in [AI_DOMAIN_CONTEXT.md](AI_DOMAIN_CONTEXT.md).
+
+This is an early-stage MVP built with [Next.js](https://nextjs.org), React, TypeScript, Tailwind CSS, and PostgreSQL via [Drizzle ORM](https://orm.drizzle.team).
+
+## Getting the code
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/alimuhammadiiii/growth-app.git
+cd growth-app
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+A plain clone is enough — there are no submodules, Git LFS files, or dev containers.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Prerequisites
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Tool | Version | Why | Verify |
+| --- | --- | --- | --- |
+| [Node.js](https://nodejs.org) | 20 or later | Required by Next.js and the `@types/node@^20` baseline | `node --version` |
+| [pnpm](https://pnpm.io) | 12.9.1 | Pinned via the `packageManager` field in `package.json`; the lockfile (`pnpm-lock.yaml`) and scripts assume it | `pnpm --version` |
+| [Docker](https://docs.docker.com/get-docker/) | recent stable | Runs the local PostgreSQL database | `docker --version` |
 
-## Learn More
+Install the pinned pnpm version with:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm install -g pnpm@12.9.1
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Getting started
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+These steps run the app in **local development** mode (with hot reload). For a production build, see [Build and quality checks](#build-and-quality-checks).
 
-## Deploy on Vercel
+1. Install dependencies:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   ```bash
+   pnpm install
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. Start the PostgreSQL database:
+
+   ```bash
+   pnpm db:start
+   ```
+
+   > [!WARNING]
+   > The database is published on host port **5433**, not the default 5432. If something else already uses port 5433, edit `docker-compose.yml` first.
+
+3. Create a `.env.local` file in the repo root with the local database connection string:
+
+   ```env
+   DATABASE_URL="postgresql://app_user:app_password@localhost:5433/growth_app"
+   ```
+
+   > [!NOTE]
+   > These credentials are the local-only defaults from `docker-compose.yml`. Don't use them for anything exposed to a network.
+
+4. Apply the database migrations:
+
+   ```bash
+   pnpm db:migrate
+   ```
+
+5. Start the development server:
+
+   ```bash
+   pnpm dev
+   ```
+
+6. Open [http://localhost:3000](http://localhost:3000) in your browser. To confirm the database connection works, check the health endpoint:
+
+   ```bash
+   curl http://localhost:3000/health/db
+   ```
+
+   It should return `{"ok":true}`.
+
+## Build and quality checks
+
+Build a production artifact and run it locally (this is distinct from the dev server above):
+
+```bash
+pnpm build
+pnpm start
+```
+
+Check code quality:
+
+```bash
+pnpm lint
+pnpm typecheck
+```
+
+There is no test suite yet.
+
+### Database tooling
+
+| Command | What it does |
+| --- | --- |
+| `pnpm db:generate` | Generate a migration from the schema in `src/db/schema` |
+| `pnpm db:migrate` | Apply pending migrations |
+| `pnpm db:studio` | Open Drizzle Studio to browse data |
+| `pnpm db:start` / `pnpm db:stop` | Start/stop the local PostgreSQL container |
+| `pnpm db:push` | Push the schema directly to the database |
+
+> [!WARNING]
+> `db:push` applies the schema straight to the database and bypasses migration history. Prefer `db:generate` + `db:migrate` so schema changes stay reproducible.
+
+## Contributing
+
+Bug reports and feature requests are welcome via [GitHub issues](https://github.com/alimuhammadiiii/growth-app/issues).
+
+Before making changes, please read:
+
+- [AGENTS.md](AGENTS.md) — architecture and coding conventions for this repo.
+- [AI_DOMAIN_CONTEXT.md](AI_DOMAIN_CONTEXT.md) — the authoritative product and business rules. Don't invent domain behavior that isn't defined there.
+
+No license has been added yet.
