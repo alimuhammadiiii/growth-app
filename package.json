@@ -16,10 +16,12 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:test-query": "tsx src/db/test-query.ts",
     "db:test-constraints": "tsx src/db/test-constraints.ts",
+    "test": "tsx src/db/test-query.ts && tsx src/db/test-constraints.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@tanstack/react-form": "^1.33.5",
+    "dotenv": "^18.0.5",
     "drizzle-orm": "^0.45.3",
     "next": "16.3.8",
     "pg": "^8.23.1",
@@ -34,7 +36,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
-    "dotenv": "^18.0.5",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",

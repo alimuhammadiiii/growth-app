@@ -1,13 +1,8 @@
-import dotenv from "dotenv";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import { activities } from "./schema/activities";
-import { executions } from "./schema/executions";
-import { goals } from "./schema/goals";
-import { users } from "./schema/users";
-
-dotenv.config({ path: ".env.local" });
-dotenv.config();
+import { db } from "./index";
+import { resolveSeedGraph, SEED, type Tx } from "./seed-data";
+import { executions, scheduleVersions } from "./schema";
 
 function pgErrorCode(error: unknown): string | null {
   let current: unknown = error;
@@ -21,133 +16,202 @@ function pgErrorCode(error: unknown): string | null {
   return null;
 }
 
-async function main(): Promise<void> {
-  const { db } = await import("./index");
+function shiftDate(date: string, days: number): string {
+  const shifted = new Date(`${date}T00:00:00Z`);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return shifted.toISOString().slice(0, 10);
+}
 
-  type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type InsertAttemptResult = { accepted: boolean; code: string | null };
 
-  async function expectInsertRejection(
-    label: string,
-    expectedCode: string,
-    attempt: (tx: Tx) => Promise<unknown>,
-  ): Promise<boolean> {
-    let insertSucceeded = false;
-    let actualCode: string | null = null;
+async function attemptInsert(
+  attempt: (tx: Tx) => Promise<unknown>,
+): Promise<InsertAttemptResult> {
+  let accepted = false;
+  let code: string | null = null;
 
-    try {
-      await db.transaction(async (tx) => {
-        await attempt(tx);
-        insertSucceeded = true;
-        throw new Error(
-          "constraint did not reject the insert — rolling back to keep data clean",
-        );
-      });
-    } catch (error) {
-      if (!insertSucceeded) {
-        actualCode = pgErrorCode(error);
-      }
-    }
-
-    if (insertSucceeded) {
-      console.log(
-        `FAIL  ${label} — insert unexpectedly succeeded (transaction rolled back, no residue)`,
+  try {
+    await db.transaction(async (tx) => {
+      await attempt(tx);
+      accepted = true;
+      throw new Error(
+        "attempt reached — rolling back to keep data clean",
       );
-      return false;
+    });
+  } catch (error) {
+    if (!accepted) {
+      code = pgErrorCode(error);
     }
-
-    const ok = actualCode === expectedCode;
-    console.log(
-      `${ok ? "PASS" : "FAIL"}  ${label} — rejected with code ${actualCode ?? "unknown"}${ok ? "" : `, expected ${expectedCode}`}`,
-    );
-    return ok;
   }
+
+  return { accepted, code };
+}
+
+function reportRejection(
+  label: string,
+  expectedCode: string,
+  result: InsertAttemptResult,
+): boolean {
+  if (result.accepted) {
+    console.log(
+      `FAIL  ${label} — insert unexpectedly succeeded (transaction rolled back, no residue)`,
+    );
+    return false;
+  }
+
+  const ok = result.code === expectedCode;
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  ${label} — rejected with code ${result.code ?? "unknown"}${ok ? "" : `, expected ${expectedCode}`}`,
+  );
+  return ok;
+}
+
+function reportAcceptance(
+  label: string,
+  result: InsertAttemptResult,
+): boolean {
+  const ok = result.accepted;
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  ${label}${ok ? " — accepted, rolled back" : ` — unexpectedly rejected with code ${result.code ?? "unknown"}`}`,
+  );
+  return ok;
+}
+
+class VerificationAbort extends Error {}
+
+async function main(): Promise<void> {
+  const seedStartDate = SEED.scheduleVersion.effectiveStartDate;
 
   let allPassed = false;
 
   try {
     console.log("Verifying database integrity constraints...\n");
 
-    const userRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.timezone, "Asia/Tehran"));
-    const goalRows = userRows[0]
-      ? await db
-          .select()
-          .from(goals)
-          .where(
-            and(eq(goals.userId, userRows[0].id), eq(goals.title, "Learn English")),
-          )
-      : [];
-    const activityRows = goalRows[0]
-      ? await db
-          .select()
-          .from(activities)
-          .where(
-            and(
-              eq(activities.goalId, goalRows[0].id),
-              eq(activities.title, "Study vocabulary"),
-            ),
-          )
-      : [];
-
-    const activity = activityRows[0];
-    if (!activity) {
+    const graph = await resolveSeedGraph();
+    if (!graph) {
       console.error(
-        "Seed data not found — run `npm run db:seed` before this script.",
+        "Seed data not found — run `pnpm run db:seed` before this script.",
       );
       process.exitCode = 1;
-      return;
+      throw new VerificationAbort();
     }
+    const { activity } = graph;
 
     const executionsBefore = await db
       .select({ id: executions.id })
       .from(executions)
       .where(eq(executions.activityId, activity.id));
-    if (executionsBefore.length !== 2) {
+    if (executionsBefore.length !== SEED.executions.length) {
       console.error(
-        `Unexpected seed state — expected 2 executions for the activity, found ${executionsBefore.length}. Run \`npm run db:seed\`.`,
+        `Unexpected seed state — expected ${SEED.executions.length} executions for the activity, found ${executionsBefore.length}. Run \`pnpm run db:seed\`.`,
       );
       process.exitCode = 1;
-      return;
+      throw new VerificationAbort();
     }
 
-    const duplicateRejected = await expectInsertRejection(
+    const versionsBefore = await db
+      .select({ id: scheduleVersions.id })
+      .from(scheduleVersions)
+      .where(eq(scheduleVersions.activityId, activity.id));
+    if (versionsBefore.length !== 1) {
+      console.error(
+        `Unexpected seed state — expected 1 schedule version for the activity, found ${versionsBefore.length}. Run \`pnpm run db:seed\`.`,
+      );
+      process.exitCode = 1;
+      throw new VerificationAbort();
+    }
+
+    const duplicateExecution = reportRejection(
       "duplicate execution rejected (UNIQUE activity_id + date)",
       "23505",
-      (tx) =>
+      await attemptInsert((tx) =>
         tx.insert(executions).values({
           activityId: activity.id,
-          date: "2026-10-05",
+          date: SEED.executions[0].date,
           status: "PARTIAL",
           note: "This should fail",
         }),
+      ),
     );
 
-    const foreignKeyRejected = await expectInsertRejection(
+    const foreignKey = reportRejection(
       "execution with non-existent activity rejected (FOREIGN KEY)",
       "23503",
-      (tx) =>
+      await attemptInsert((tx) =>
         tx.insert(executions).values({
           activityId: crypto.randomUUID(),
-          date: "2026-10-06",
+          date: SEED.executions[1].date,
           status: "COMPLETED",
           note: null,
         }),
+      ),
+    );
+
+    const boundedOverlap = reportRejection(
+      "overlapping schedule version rejected (EXCLUDE activity + daterange)",
+      "23P01",
+      await attemptInsert((tx) =>
+        tx.insert(scheduleVersions).values({
+          activityId: activity.id,
+          effectiveStartDate: shiftDate(seedStartDate, 10),
+          effectiveEndDate: shiftDate(seedStartDate, 27),
+        }),
+      ),
+    );
+
+    const openOverlap = reportRejection(
+      "second open-ended schedule version rejected (overlaps the seed's open-ended version)",
+      "23P01",
+      await attemptInsert((tx) =>
+        tx.insert(scheduleVersions).values({
+          activityId: activity.id,
+          effectiveStartDate: shiftDate(seedStartDate, 57),
+          effectiveEndDate: null,
+        }),
+      ),
+    );
+
+    const historicalAdjacent = reportAcceptance(
+      "non-overlapping historical schedule version accepted (ends exactly at the seed version's start)",
+      await attemptInsert((tx) =>
+        tx.insert(scheduleVersions).values({
+          activityId: activity.id,
+          effectiveStartDate: shiftDate(seedStartDate, -34),
+          effectiveEndDate: seedStartDate,
+        }),
+      ),
     );
 
     const executionsAfter = await db
       .select({ id: executions.id })
       .from(executions)
       .where(eq(executions.activityId, activity.id));
-    const noResidue = executionsAfter.length === executionsBefore.length;
+    const noExecutionResidue = executionsAfter.length === executionsBefore.length;
     console.log(
-      `${noResidue ? "PASS" : "FAIL"}  no residual rows — execution count unchanged (${executionsAfter.length})`,
+      `${noExecutionResidue ? "PASS" : "FAIL"}  no residual executions — count unchanged (${executionsAfter.length})`,
     );
 
-    allPassed = duplicateRejected && foreignKeyRejected && noResidue;
+    const versionsAfter = await db
+      .select({ id: scheduleVersions.id })
+      .from(scheduleVersions)
+      .where(eq(scheduleVersions.activityId, activity.id));
+    const noVersionResidue = versionsAfter.length === versionsBefore.length;
+    console.log(
+      `${noVersionResidue ? "PASS" : "FAIL"}  no residual schedule versions — count unchanged (${versionsAfter.length})`,
+    );
+
+    allPassed =
+      duplicateExecution &&
+      foreignKey &&
+      boundedOverlap &&
+      openOverlap &&
+      historicalAdjacent &&
+      noExecutionResidue &&
+      noVersionResidue;
   } catch (error) {
-    console.error("Unexpected error:", error);
+    if (!(error instanceof VerificationAbort)) {
+      console.error("Unexpected error:", error);
+    }
   } finally {
     await db.$client.end();
   }
@@ -161,7 +225,4 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
-  console.error("Constraint verification failed:", error);
-  process.exitCode = 1;
-});
+main();

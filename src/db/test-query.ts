@@ -1,26 +1,19 @@
-import dotenv from "dotenv";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 
-import { activities } from "./schema/activities";
-import { executions } from "./schema/executions";
-import { goals } from "./schema/goals";
-import { scheduleVersionDays, scheduleVersions } from "./schema/schedules";
-import { users } from "./schema/users";
-
-dotenv.config({ path: ".env.local" });
-dotenv.config();
-
-const EXPECTED_DAYS = ["MONDAY", "WEDNESDAY", "FRIDAY"];
-const EXPECTED_EXECUTIONS = [
-  { date: "2026-10-05", status: "COMPLETED", note: null },
-  { date: "2026-10-07", status: "PARTIAL", note: "Only had 20 minutes" },
-] as const;
+import { db } from "./index";
+import { DEV_PASSWORD, resolveSeedGraph, SEED } from "./seed-data";
+import {
+  activities,
+  executions,
+  goals,
+  scheduleVersionDays,
+  scheduleVersions,
+  users,
+} from "./schema";
 
 class VerificationAbort extends Error {}
 
 async function main(): Promise<void> {
-  const { db } = await import("./index");
-
   const failures: string[] = [];
 
   function check(name: string, ok: boolean, detail = ""): void {
@@ -30,103 +23,129 @@ async function main(): Promise<void> {
     }
   }
 
-  function requireRecord<T>(record: T | undefined, name: string): T {
-    if (record === undefined) {
-      check(name, false);
-      throw new VerificationAbort();
-    }
-    return record;
-  }
-
   try {
     console.log("Verifying seeded graph...\n");
 
-    const userRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.timezone, "Asia/Tehran"));
+    const graph = await resolveSeedGraph();
     check(
-      "user exists with timezone Asia/Tehran",
-      userRows.length === 1,
-      `found ${userRows.length}`,
+      "seed graph resolves (user → goal → activity → schedule version)",
+      graph !== null,
+      graph
+        ? `user=${graph.user.id}, goal=${graph.goal.id}, activity=${graph.activity.id}, schedule=${graph.scheduleVersion.id}`
+        : "not found — run `pnpm run db:seed` first",
     );
-    const user = requireRecord(userRows[0], "user exists with timezone Asia/Tehran");
+    if (!graph) {
+      throw new VerificationAbort();
+    }
+
+    const { user, goal, activity, scheduleVersion } = graph;
+
+    const seedUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(
+          eq(users.name, SEED.user.name),
+          eq(users.timezone, SEED.user.timezone),
+        ),
+      );
     check(
-      `user name is "Dev User"`,
-      user.name === "Dev User",
+      "exactly one seed user matches (name + timezone)",
+      seedUsers.length === 1,
+      `found ${seedUsers.length}`,
+    );
+
+    const seedGoals = await db
+      .select({ id: goals.id })
+      .from(goals)
+      .where(and(eq(goals.userId, user.id), eq(goals.title, SEED.goal.title)));
+    check(
+      `exactly one seed goal for the user`,
+      seedGoals.length === 1,
+      `found ${seedGoals.length}`,
+    );
+
+    const seedActivities = await db
+      .select({ id: activities.id })
+      .from(activities)
+      .where(
+        and(
+          eq(activities.goalId, goal.id),
+          eq(activities.title, SEED.activity.title),
+        ),
+      );
+    check(
+      `exactly one seed activity for the goal`,
+      seedActivities.length === 1,
+      `found ${seedActivities.length}`,
+    );
+
+    const seedVersions = await db
+      .select({ id: scheduleVersions.id })
+      .from(scheduleVersions)
+      .where(
+        and(
+          eq(scheduleVersions.activityId, activity.id),
+          eq(
+            scheduleVersions.effectiveStartDate,
+            SEED.scheduleVersion.effectiveStartDate,
+          ),
+          isNull(scheduleVersions.effectiveEndDate),
+        ),
+      );
+    check(
+      "exactly one open-ended seed schedule version for the activity",
+      seedVersions.length === 1,
+      `found ${seedVersions.length}`,
+    );
+
+    check(
+      `user name is "${SEED.user.name}"`,
+      user.name === SEED.user.name,
       `name=${user.name}`,
     );
     check(
+      `user timezone is ${SEED.user.timezone}`,
+      user.timezone === SEED.user.timezone,
+      `timezone=${user.timezone}`,
+    );
+    check(
       "user password is stored as a hash, not plaintext",
-      user.passwordHash.startsWith("scrypt$") && user.passwordHash !== "dev-password-123",
+      user.passwordHash.startsWith("scrypt$") && user.passwordHash !== DEV_PASSWORD,
       `passwordHash=${user.passwordHash.slice(0, 20)}...`,
     );
 
-    const goalRows = await db
-      .select()
-      .from(goals)
-      .where(and(eq(goals.userId, user.id), eq(goals.title, "Learn English")));
-    check(
-      "goal 'Learn English' exists",
-      goalRows.length === 1,
-      `found ${goalRows.length}`,
-    );
-    const goal = requireRecord(goalRows[0], "goal 'Learn English' exists");
     check(
       "goal belongs to user",
       goal.userId === user.id,
       `goal.userId=${goal.userId}, user.id=${user.id}`,
     );
-    check("goal status is ACTIVE", goal.status === "ACTIVE", `status=${goal.status}`);
-
-    const activityRows = await db
-      .select()
-      .from(activities)
-      .where(
-        and(eq(activities.goalId, goal.id), eq(activities.title, "Study vocabulary")),
-      );
     check(
-      "activity 'Study vocabulary' exists",
-      activityRows.length === 1,
-      `found ${activityRows.length}`,
+      `goal status is ${SEED.goal.status}`,
+      goal.status === SEED.goal.status,
+      `status=${goal.status}`,
     );
-    const activity = requireRecord(
-      activityRows[0],
-      "activity 'Study vocabulary' exists",
-    );
+
     check(
       "activity belongs to goal",
       activity.goalId === goal.id,
       `activity.goalId=${activity.goalId}, goal.id=${goal.id}`,
     );
     check(
-      "activity status is ACTIVE",
-      activity.status === "ACTIVE",
+      `activity status is ${SEED.activity.status}`,
+      activity.status === SEED.activity.status,
       `status=${activity.status}`,
     );
 
-    const scheduleVersionRows = await db
-      .select()
-      .from(scheduleVersions)
-      .where(
-        and(
-          eq(scheduleVersions.activityId, activity.id),
-          eq(scheduleVersions.effectiveStartDate, "2026-10-05"),
-        ),
-      );
-    check(
-      "schedule version with startDate 2026-10-05 exists",
-      scheduleVersionRows.length === 1,
-      `found ${scheduleVersionRows.length}`,
-    );
-    const scheduleVersion = requireRecord(
-      scheduleVersionRows[0],
-      "schedule version with startDate 2026-10-05 exists",
-    );
     check(
       "schedule version belongs to activity",
       scheduleVersion.activityId === activity.id,
       `version.activityId=${scheduleVersion.activityId}, activity.id=${activity.id}`,
+    );
+    check(
+      `schedule version startDate is ${SEED.scheduleVersion.effectiveStartDate}`,
+      scheduleVersion.effectiveStartDate === SEED.scheduleVersion.effectiveStartDate,
+      `startDate=${scheduleVersion.effectiveStartDate}`,
     );
     check(
       "schedule version endDate is null (open-ended)",
@@ -142,10 +161,10 @@ async function main(): Promise<void> {
       .map((row) => row.dayOfWeek)
       .sort()
       .join(",");
-    const expectedDays = [...EXPECTED_DAYS].sort().join(",");
+    const expectedDays = [...SEED.days].sort().join(",");
     check(
-      "schedule version has exactly the days MONDAY, WEDNESDAY, FRIDAY",
-      dayRows.length === 3 && actualDays === expectedDays,
+      "schedule version has exactly the planned days",
+      dayRows.length === SEED.days.length && actualDays === expectedDays,
       `days=[${actualDays}]`,
     );
 
@@ -155,8 +174,8 @@ async function main(): Promise<void> {
       .where(eq(executions.activityId, activity.id))
       .orderBy(asc(executions.date));
     check(
-      "activity has exactly 2 executions",
-      executionRows.length === 2,
+      `activity has exactly ${SEED.executions.length} executions`,
+      executionRows.length === SEED.executions.length,
       `found ${executionRows.length}`,
     );
 
@@ -168,7 +187,7 @@ async function main(): Promise<void> {
       );
     }
 
-    for (const expected of EXPECTED_EXECUTIONS) {
+    for (const expected of SEED.executions) {
       const row = executionRows.find((candidate) => candidate.date === expected.date);
       if (!row) {
         check(`execution on ${expected.date} exists`, false, "missing");
@@ -186,20 +205,18 @@ async function main(): Promise<void> {
       );
     }
 
-    if (user && goal && activity && scheduleVersion) {
-      console.log("\nGraph:");
-      console.log(`  user       ${user.id}  ${user.name} (${user.timezone})`);
-      console.log(`  goal       ${goal.id}  ${goal.title} (${goal.status})`);
-      console.log(`  activity   ${activity.id}  ${activity.title} (${activity.status})`);
+    console.log("\nGraph:");
+    console.log(`  user       ${user.id}  ${user.name} (${user.timezone})`);
+    console.log(`  goal       ${goal.id}  ${goal.title} (${goal.status})`);
+    console.log(`  activity   ${activity.id}  ${activity.title} (${activity.status})`);
+    console.log(
+      `  schedule   ${scheduleVersion.id}  [${scheduleVersion.effectiveStartDate}, ${scheduleVersion.effectiveEndDate ?? "null"})`,
+    );
+    console.log(`    days     ${dayRows.map((row) => row.dayOfWeek).join(", ")}`);
+    for (const row of executionRows) {
       console.log(
-        `  schedule   ${scheduleVersion.id}  [${scheduleVersion.effectiveStartDate}, ${scheduleVersion.effectiveEndDate ?? "null"})`,
+        `  execution  ${row.date}  ${row.status}${row.note ? ` — "${row.note}"` : " — no note"}`,
       );
-      console.log(`    days     ${dayRows.map((row) => row.dayOfWeek).join(", ")}`);
-      for (const row of executionRows) {
-        console.log(
-          `  execution  ${row.date}  ${row.status}${row.note ? ` — "${row.note}"` : " — no note"}`,
-        );
-      }
     }
   } catch (error) {
     if (!(error instanceof VerificationAbort)) {
@@ -219,7 +236,4 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
-  console.error("Verification failed:", error);
-  process.exitCode = 1;
-});
+main();

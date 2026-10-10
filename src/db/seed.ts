@@ -1,18 +1,22 @@
 import { randomBytes, scryptSync } from "node:crypto";
 
-import dotenv from "dotenv";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
+import { db } from "./index";
+import {
+  DEV_PASSWORD,
+  findSeedActivity,
+  findSeedGoal,
+  findSeedScheduleVersion,
+  findSeedUser,
+  SEED,
+  type Tx,
+} from "./seed-data";
 import { activities } from "./schema/activities";
 import { executions } from "./schema/executions";
 import { goals } from "./schema/goals";
 import { scheduleVersionDays, scheduleVersions } from "./schema/schedules";
 import { users } from "./schema/users";
-
-dotenv.config({ path: ".env.local" });
-dotenv.config();
-
-const DEV_PASSWORD = "dev-password-123";
 
 function hashDevPassword(password: string): string {
   const salt = randomBytes(16);
@@ -20,53 +24,13 @@ function hashDevPassword(password: string): string {
   return `scrypt$${salt.toString("hex")}$${hash.toString("hex")}`;
 }
 
-const SEED = {
-  user: {
-    name: "Dev User",
-    timezone: "Asia/Tehran",
-  },
-  goal: {
-    title: "Learn English",
-    status: "ACTIVE",
-  },
-  activity: {
-    title: "Study vocabulary",
-    status: "ACTIVE",
-  },
-  scheduleVersion: {
-    effectiveStartDate: "2026-10-05",
-    effectiveEndDate: null,
-  },
-  days: ["MONDAY", "WEDNESDAY", "FRIDAY"],
-  executions: [
-    {
-      date: "2026-10-05",
-      status: "COMPLETED",
-      note: null,
-    },
-    {
-      date: "2026-10-07",
-      status: "PARTIAL",
-      note: "Only had 20 minutes",
-    },
-  ],
-} as const;
+type FindOrCreateResult<T> = { record: T; created: boolean };
 
 async function main(): Promise<void> {
-  const { db } = await import("./index");
-
-  type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-  async function findOrCreateUser(tx: Tx) {
-    const existing = await tx
-      .select()
-      .from(users)
-      .where(eq(users.timezone, SEED.user.timezone))
-      .orderBy(asc(users.createdAt))
-      .limit(1);
-
-    if (existing[0]) {
-      return { record: existing[0], created: false };
+  async function findOrCreateUser(tx: Tx): Promise<FindOrCreateResult<typeof users.$inferSelect>> {
+    const existing = await findSeedUser(tx);
+    if (existing) {
+      return { record: existing, created: false };
     }
 
     const inserted = await tx
@@ -81,16 +45,10 @@ async function main(): Promise<void> {
     return { record: inserted[0], created: true };
   }
 
-  async function findOrCreateGoal(tx: Tx, userId: string) {
-    const existing = await tx
-      .select()
-      .from(goals)
-      .where(and(eq(goals.userId, userId), eq(goals.title, SEED.goal.title)))
-      .orderBy(asc(goals.createdAt))
-      .limit(1);
-
-    if (existing[0]) {
-      return { record: existing[0], created: false };
+  async function findOrCreateGoal(tx: Tx, userId: string): Promise<FindOrCreateResult<typeof goals.$inferSelect>> {
+    const existing = await findSeedGoal(tx, userId);
+    if (existing) {
+      return { record: existing, created: false };
     }
 
     const inserted = await tx
@@ -101,21 +59,10 @@ async function main(): Promise<void> {
     return { record: inserted[0], created: true };
   }
 
-  async function findOrCreateActivity(tx: Tx, goalId: string) {
-    const existing = await tx
-      .select()
-      .from(activities)
-      .where(
-        and(
-          eq(activities.goalId, goalId),
-          eq(activities.title, SEED.activity.title),
-        ),
-      )
-      .orderBy(asc(activities.createdAt))
-      .limit(1);
-
-    if (existing[0]) {
-      return { record: existing[0], created: false };
+  async function findOrCreateActivity(tx: Tx, goalId: string): Promise<FindOrCreateResult<typeof activities.$inferSelect>> {
+    const existing = await findSeedActivity(tx, goalId);
+    if (existing) {
+      return { record: existing, created: false };
     }
 
     const inserted = await tx
@@ -130,25 +77,10 @@ async function main(): Promise<void> {
     return { record: inserted[0], created: true };
   }
 
-  async function findOrCreateScheduleVersion(tx: Tx, activityId: string) {
-    const existing = await tx
-      .select()
-      .from(scheduleVersions)
-      .where(
-        and(
-          eq(scheduleVersions.activityId, activityId),
-          eq(
-            scheduleVersions.effectiveStartDate,
-            SEED.scheduleVersion.effectiveStartDate,
-          ),
-          isNull(scheduleVersions.effectiveEndDate),
-        ),
-      )
-      .orderBy(asc(scheduleVersions.createdAt))
-      .limit(1);
-
-    if (existing[0]) {
-      return { record: existing[0], created: false };
+  async function findOrCreateScheduleVersion(tx: Tx, activityId: string): Promise<FindOrCreateResult<typeof scheduleVersions.$inferSelect>> {
+    const existing = await findSeedScheduleVersion(tx, activityId);
+    if (existing) {
+      return { record: existing, created: false };
     }
 
     const inserted = await tx
@@ -188,7 +120,7 @@ async function main(): Promise<void> {
     tx: Tx,
     activityId: string,
     execution: (typeof SEED.executions)[number],
-  ) {
+  ): Promise<FindOrCreateResult<typeof executions.$inferSelect>> {
     const existing = await tx
       .select()
       .from(executions)
