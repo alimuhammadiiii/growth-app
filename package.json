@@ -13,6 +13,9 @@
     "db:push": "drizzle-kit push",
     "db:start": "docker compose up -d",
     "db:stop": "docker compose stop",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:test-query": "tsx src/db/test-query.ts",
+    "db:test-constraints": "tsx src/db/test-constraints.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
@@ -36,6 +39,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   },
   "packageManager": "pnpm@12.9.1"

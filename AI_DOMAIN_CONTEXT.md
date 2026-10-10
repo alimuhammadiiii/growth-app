@@ -876,10 +876,26 @@ The User currently needs at least the concept of:
 
 ``` text
 id
+name
+passwordHash
 timezone
 createdAt
 updatedAt
 ```
+
+`name` is a required display name.
+
+`passwordHash` exists so that a future login can verify credentials.
+Passwords must never be stored in plaintext. Until real login exists,
+the only producer of password hashes is the development seed, which
+stores a salted scrypt hash in the format:
+
+``` text
+scrypt$<saltHex>$<hashHex>
+```
+
+Login/session architecture itself remains an open decision (see Open
+Decisions). Storing the hash does not implement authentication.
 
 Timezone behavior is important and is explicitly defined below.
 
