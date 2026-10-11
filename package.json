@@ -16,7 +16,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:test-query": "tsx src/db/test-query.ts",
     "db:test-constraints": "tsx src/db/test-constraints.ts",
-    "test": "tsx src/db/test-query.ts && tsx src/db/test-constraints.ts",
+    "test": "vitest run",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
@@ -55,7 +55,8 @@
     "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.3"
   },
   "packageManager": "pnpm@12.9.1"
 }
