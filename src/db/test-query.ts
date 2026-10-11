@@ -3,6 +3,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "./index";
 import { DEV_PASSWORD, resolveSeedGraph, SEED } from "./seed-data";
 import {
+  accounts,
   activities,
   executions,
   goals,
@@ -43,14 +44,9 @@ async function main(): Promise<void> {
     const seedUsers = await db
       .select({ id: users.id })
       .from(users)
-      .where(
-        and(
-          eq(users.name, SEED.user.name),
-          eq(users.timezone, SEED.user.timezone),
-        ),
-      );
+      .where(eq(users.email, SEED.user.email));
     check(
-      "exactly one seed user matches (name + timezone)",
+      "exactly one seed user matches (email)",
       seedUsers.length === 1,
       `found ${seedUsers.length}`,
     );
@@ -110,9 +106,26 @@ async function main(): Promise<void> {
       `timezone=${user.timezone}`,
     );
     check(
-      "user password is stored as a hash, not plaintext",
-      user.passwordHash.startsWith("scrypt$") && user.passwordHash !== DEV_PASSWORD,
-      `passwordHash=${user.passwordHash.slice(0, 20)}...`,
+      `user email is ${SEED.user.email}`,
+      user.email === SEED.user.email,
+      `email=${user.email}`,
+    );
+
+    const credentialAccounts = await db
+      .select()
+      .from(accounts)
+      .where(and(eq(accounts.userId, user.id), eq(accounts.providerId, "credential")));
+    check(
+      "user has exactly one credential account",
+      credentialAccounts.length === 1,
+      `found ${credentialAccounts.length}`,
+    );
+    const storedPassword = credentialAccounts[0]?.password ?? "";
+    check(
+      "credential password is stored as a salted scrypt hash (salt:key hex), not plaintext",
+      /^[0-9a-f]{32}:[0-9a-f]{128}$/.test(storedPassword) &&
+        storedPassword !== DEV_PASSWORD,
+      `password=${storedPassword.slice(0, 12)}...`,
     );
 
     check(

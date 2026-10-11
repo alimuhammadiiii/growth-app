@@ -1,3 +1,4 @@
+export { accounts, sessions, verifications } from "./schema/auth";
 export { activities } from "./schema/activities";
 export { executions } from "./schema/executions";
 export { goals } from "./schema/goals";

@@ -1,14 +1,12 @@
-import { randomBytes, scryptSync } from "node:crypto";
-
 import { and, eq } from "drizzle-orm";
 
+import { auth } from "../lib/auth";
 import { db } from "./index";
 import {
   DEV_PASSWORD,
   findSeedActivity,
   findSeedGoal,
   findSeedScheduleVersion,
-  findSeedUser,
   SEED,
   type Tx,
 } from "./seed-data";
@@ -18,31 +16,39 @@ import { goals } from "./schema/goals";
 import { scheduleVersionDays, scheduleVersions } from "./schema/schedules";
 import { users } from "./schema/users";
 
-function hashDevPassword(password: string): string {
-  const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 });
-  return `scrypt$${salt.toString("hex")}$${hash.toString("hex")}`;
-}
-
 type FindOrCreateResult<T> = { record: T; created: boolean };
 
 async function main(): Promise<void> {
-  async function findOrCreateUser(tx: Tx): Promise<FindOrCreateResult<typeof users.$inferSelect>> {
-    const existing = await findSeedUser(tx);
-    if (existing) {
-      return { record: existing, created: false };
+  async function findOrCreateUser(): Promise<FindOrCreateResult<typeof users.$inferSelect>> {
+    const existing = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, SEED.user.email))
+      .limit(1);
+    if (existing[0]) {
+      return { record: existing[0], created: false };
     }
 
-    const inserted = await tx
-      .insert(users)
-      .values({
+    // Better Auth creates the user and its credential account atomically.
+    await auth.api.signUpEmail({
+      body: {
         name: SEED.user.name,
-        passwordHash: hashDevPassword(DEV_PASSWORD),
+        email: SEED.user.email,
+        username: SEED.user.username,
+        password: DEV_PASSWORD,
         timezone: SEED.user.timezone,
-      })
-      .returning();
+      },
+    });
 
-    return { record: inserted[0], created: true };
+    const created = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, SEED.user.email))
+      .limit(1);
+    if (!created[0]) {
+      throw new Error("seed user missing after signUpEmail");
+    }
+    return { record: created[0], created: true };
   }
 
   async function findOrCreateGoal(tx: Tx, userId: string): Promise<FindOrCreateResult<typeof goals.$inferSelect>> {
@@ -150,12 +156,12 @@ async function main(): Promise<void> {
   }
 
   try {
-    await db.transaction(async (tx) => {
-      const user = await findOrCreateUser(tx);
-      console.log(
-        `user        ${user.created ? "created" : "reused   "} ${user.record.id} (name: ${user.record.name}, timezone: ${user.record.timezone})`,
-      );
+    const user = await findOrCreateUser();
+    console.log(
+      `user        ${user.created ? "created" : "reused   "} ${user.record.id} (name: ${user.record.name}, timezone: ${user.record.timezone})`,
+    );
 
+    await db.transaction(async (tx) => {
       const goal = await findOrCreateGoal(tx, user.record.id);
       console.log(
         `goal        ${goal.created ? "created" : "reused   "} ${goal.record.id} (title: ${goal.record.title})`,

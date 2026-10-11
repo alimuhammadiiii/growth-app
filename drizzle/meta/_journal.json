@@ -29,6 +29,20 @@
       "when": 1791639761638,
       "tag": "0003_uneven_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791644235539,
+      "tag": "0004_add-auth-users",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791644248733,
+      "tag": "0005_drop-users-password-hash",
+      "breakpoints": true
     }
   ]
 }

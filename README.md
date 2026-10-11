@@ -50,11 +50,16 @@ These steps run the app in **local development** mode (with hot reload). For a p
    > [!WARNING]
    > The database is published on host port **5433**, not the default 5432. If something else already uses port 5433, edit `docker-compose.yml` first.
 
-3. Create a `.env.local` file in the repo root with the local database connection string:
+3. Create a `.env.local` file in the repo root (see [`.env.example`](.env.example)):
 
    ```env
    DATABASE_URL="postgresql://app_user:app_password@localhost:5433/growth_app"
+   BETTER_AUTH_SECRET="<generate with: openssl rand -base64 32>"
+   BETTER_AUTH_URL="http://localhost:3000"
    ```
+
+   `BETTER_AUTH_SECRET` signs authentication session tokens — use a random
+   value of at least 32 characters and never commit it.
 
    > [!NOTE]
    > These credentials are the local-only defaults from `docker-compose.yml`. Don't use them for anything exposed to a network.
@@ -109,6 +114,16 @@ There is no test suite yet.
 
 > [!WARNING]
 > `db:push` applies the schema straight to the database and bypasses migration history. Prefer `db:generate` + `db:migrate` so schema changes stay reproducible.
+
+> [!WARNING]
+> Migration `0004` adds a `NOT NULL` email column to `users` and fails on databases that already contain users. If you seeded a database before Better Auth was introduced, reset it first:
+>
+> ```bash
+> docker compose down -v
+> pnpm db:start
+> pnpm db:migrate
+> pnpm db:seed
+> ```
 
 ## Contributing
 

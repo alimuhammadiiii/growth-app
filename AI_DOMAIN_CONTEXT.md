@@ -877,7 +877,8 @@ The User currently needs at least the concept of:
 ``` text
 id
 name
-passwordHash
+email
+username
 timezone
 createdAt
 updatedAt
@@ -885,17 +886,13 @@ updatedAt
 
 `name` is a required display name.
 
-`passwordHash` exists so that a future login can verify credentials.
-Passwords must never be stored in plaintext. Until real login exists,
-the only producer of password hashes is the development seed, which
-stores a salted scrypt hash in the format:
+`email` and `username` are authentication identifiers (users sign in
+with either). `email` is required; `username` is optional but unique.
 
-``` text
-scrypt$<saltHex>$<hashHex>
-```
-
-Login/session architecture itself remains an open decision (see Open
-Decisions). Storing the hash does not implement authentication.
+Credentials (password hashes) are owned by the authentication layer
+(Better Auth, see ADR-0003) and stored in its `accounts` table — never
+on the User itself. Passwords must never be stored in plaintext. App
+code must not write to the auth tables directly.
 
 Timezone behavior is important and is explicitly defined below.
 
@@ -1431,7 +1428,6 @@ core loop.
 The following must NOT be treated as finalized business rules until
 explicitly decided:
 
--   Exact authentication mechanism.
 -   Exact final Goal status enum.
 -   Exact final Activity status enum.
 -   Exact final Schedule Version transition enum.
@@ -1448,12 +1444,14 @@ explicitly decided:
 -   Exact behavior when an Activity is archived while historical/future
     schedule data exists.
 -   Permanent account/data deletion policy.
--   Authentication/session architecture.
 -   Whether execution notes are one free-text field or structured
     reason + note.
 -   Whether partial completion eventually supports numeric
     amount/duration.
 -   Whether users can manually change timezone in a later release.
+-   Exact behavior when the device timezone cannot be detected at
+    sign-up (current: silent fallback to UTC; the sign-up form detects
+    the browser IANA timezone and normally sends it).
 
 When implementing any of these, stop and treat the choice as a product
 decision rather than inventing a rule.

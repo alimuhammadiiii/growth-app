@@ -8,6 +8,8 @@ export const DEV_PASSWORD = "dev-password-123";
 export const SEED = {
   user: {
     name: "Dev User",
+    email: "dev@growth-app.local",
+    username: "dev",
     timezone: "Asia/Tehran",
   },
   goal: {
@@ -50,12 +52,7 @@ export async function findSeedUser(tx: Tx) {
   const rows = await tx
     .select()
     .from(users)
-    .where(
-      and(
-        eq(users.name, SEED.user.name),
-        eq(users.timezone, SEED.user.timezone),
-      ),
-    )
+    .where(eq(users.email, SEED.user.email))
     .orderBy(asc(users.createdAt))
     .limit(1);
   return rows[0];
