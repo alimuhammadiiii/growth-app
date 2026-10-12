@@ -23,16 +23,22 @@ export default async function Home() {
       </div>
 
       {session ? (
-        <SessionCard
-          name={session.user.name}
-          email={session.user.email}
-          username={session.user.username ?? null}
-        />
+        <div className="flex w-full max-w-sm flex-col items-center gap-3">
+          <SessionCard
+            name={session.user.name}
+            email={session.user.email}
+            username={session.user.username ?? null}
+          />
+          <Button size="lg" nativeButton={false} render={<Link href="/dashboard" />}>
+            Open dashboard
+          </Button>
+        </div>
       ) : (
         <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row">
           <Button
             size="lg"
             className="flex-1"
+            nativeButton={false}
             render={<Link href="/signup" />}
           >
             Create account
@@ -41,6 +47,7 @@ export default async function Home() {
             size="lg"
             variant="outline"
             className="flex-1"
+            nativeButton={false}
             render={<Link href="/login" />}
           >
             Sign in

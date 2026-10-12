@@ -706,6 +706,12 @@ Historical executions should remain.
 The system must avoid changing historical reports simply because an
 Activity was archived later.
 
+Decided (2026-10-12), dashboard scope only: the dashboard's "This week" /
+"Last 7 days" panels and chart reflect the user's current active plan.
+Archiving an Activity removes it from those panels immediately, including
+past days they already display. Broader historical reports remain governed
+by the rule above and stay open (see Open Decisions).
+
 ------------------------------------------------------------------------
 
 # 23. Analysis Philosophy
@@ -1442,7 +1448,10 @@ explicitly decided:
 -   Exact behavior when a Goal is archived while future schedule
     versions exist.
 -   Exact behavior when an Activity is archived while historical/future
-    schedule data exists.
+    schedule data exists. (Partially decided 2026-10-12: the dashboard's
+    "This week" / "Last 7 days" panels and chart show the current active
+    plan only and exclude archived Activities — see 22. Weekly/monthly
+    reports and historical views remain open.)
 -   Permanent account/data deletion policy.
 -   Whether execution notes are one free-text field or structured
     reason + note.

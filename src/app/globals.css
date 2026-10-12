@@ -128,3 +128,31 @@
     @apply font-sans;
   }
 }
+
+/*
+ * Translucent app chrome (dashboard header + sidebar).
+ * Content scrolls under the material; solid fallback when the user
+ * prefers reduced transparency.
+ */
+.dashboard-header {
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+.app-sidebar {
+  --sidebar: color-mix(in oklab, var(--background) 88%, transparent);
+  background: var(--sidebar);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .dashboard-header {
+    background: var(--background);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .app-sidebar {
+    --sidebar: var(--background);
+  }
+}
