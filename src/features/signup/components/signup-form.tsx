@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
-import { CircleAlert, CircleCheck, Eye, EyeOff } from "lucide-react";
+import { CircleAlert, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-
-import { cn } from "cn";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -34,27 +32,34 @@ import {
 } from "../constants";
 import { submitSignup } from "../submit-signup";
 import { signupSchema, type SignupValues } from "../schema";
-import type { Availability, SignUpFieldErrors } from "../types";
+import type { SignUpFieldErrors } from "../types";
 
 const messageAnimation =
-  "animate-in fade-in-0 duration-150 motion-reduce:animate-none";
+  "animate-in fade-in-0 duration-150 motion-reduce:animate-none h-[20px]";
 
-function toFieldError(errors: unknown[]): string | undefined {
-  const first = errors[0] as string | { message?: string } | undefined;
-  if (first === undefined || first === null || first === "") {
-    return undefined;
+function toFieldError(errors: readonly unknown[]): string | undefined {
+  const first = errors[0];
+
+  if (typeof first === "string") {
+    return first;
   }
-  return typeof first === "string" ? first : first.message;
+
+  if (
+    typeof first === "object" &&
+    first !== null &&
+    "message" in first &&
+    typeof first.message === "string"
+  ) {
+    return first.message;
+  }
+
+  return undefined;
 }
 
 export function SignupForm() {
   const router = useRouter();
   const timezone = useDetectedTimezone();
   const [serverErrors, setServerErrors] = useState<SignUpFieldErrors>({});
-  const [emailAvailability, setEmailAvailability] =
-    useState<Availability | null>(null);
-  const [usernameAvailability, setUsernameAvailability] =
-    useState<Availability | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
 
   const form = useForm({
@@ -86,7 +91,6 @@ export function SignupForm() {
 
   return (
     <form
-      noValidate
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -95,10 +99,7 @@ export function SignupForm() {
       className="flex flex-col gap-4"
     >
       {serverErrors.form ? (
-        <Alert
-          variant="destructive"
-          className="animate-in fade-in-0 duration-150 motion-reduce:animate-none"
-        >
+        <Alert variant="destructive" className={messageAnimation}>
           <CircleAlert />
           <AlertDescription>{serverErrors.form}</AlertDescription>
         </Alert>
@@ -106,7 +107,7 @@ export function SignupForm() {
 
       <form.Field name="name">
         {(field) => {
-          const error = field.state.meta.errors[0]?.message;
+          const error = toFieldError(field.state.meta.errors);
 
           return (
             <Field data-invalid={error ? true : undefined}>
@@ -138,10 +139,11 @@ export function SignupForm() {
         validators={{
           onChangeAsync: async ({ value }) => {
             const available = await checkEmailAvailability(value);
+
             if (available === null) {
               return undefined;
             }
-            setEmailAvailability({ value, available });
+
             return available ? undefined : EMAIL_TAKEN_MESSAGE;
           },
           onChangeAsyncDebounceMs: AVAILABILITY_DEBOUNCE_MS,
@@ -150,12 +152,6 @@ export function SignupForm() {
         {(field) => {
           const error =
             toFieldError(field.state.meta.errors) ?? serverErrors.email;
-          const success =
-            !error &&
-            emailAvailability?.available &&
-            emailAvailability.value === field.state.value
-              ? "Email is available"
-              : undefined;
 
           return (
             <Field data-invalid={error ? true : undefined}>
@@ -168,13 +164,7 @@ export function SignupForm() {
                 autoCapitalize="none"
                 spellCheck={false}
                 aria-invalid={error ? true : undefined}
-                aria-describedby={
-                  error
-                    ? `${field.name}-error`
-                    : success
-                      ? `${field.name}-success`
-                      : undefined
-                }
+                aria-describedby={error && `${field.name}-error`}
                 value={field.state.value}
                 onChange={(e) => {
                   if (serverErrors.email) {
@@ -183,26 +173,12 @@ export function SignupForm() {
                   field.handleChange(e.target.value);
                 }}
               />
-              {success ? (
-                <FieldDescription
-                  id={`${field.name}-success`}
-                  className={cn(
-                    "flex items-center gap-1.5 text-emerald-600 dark:text-emerald-500",
-                    messageAnimation,
-                  )}
-                >
-                  <CircleCheck className="size-3.5" />
-                  {success}
-                </FieldDescription>
-              ) : null}
-              {error ? (
-                <FieldError
-                  id={`${field.name}-error`}
-                  className={messageAnimation}
-                >
-                  {error}
-                </FieldError>
-              ) : null}
+              <FieldError
+                id={`${field.name}-error`}
+                className={messageAnimation}
+              >
+                {error}
+              </FieldError>
             </Field>
           );
         }}
@@ -211,27 +187,22 @@ export function SignupForm() {
       <form.Field
         name="username"
         validators={{
+          onChangeAsyncDebounceMs: AVAILABILITY_DEBOUNCE_MS,
           onChangeAsync: async ({ value }) => {
             const available = await checkUsernameAvailability(value);
+
             if (available === null) {
               return undefined;
             }
-            setUsernameAvailability({ value, available });
+
             return available ? undefined : USERNAME_TAKEN_MESSAGE;
           },
-          onChangeAsyncDebounceMs: AVAILABILITY_DEBOUNCE_MS,
         }}
       >
         {(field) => {
-          const error =
-            toFieldError(field.state.meta.errors) ?? serverErrors.username;
-          const success =
-            !error &&
-            usernameAvailability?.available &&
-            usernameAvailability.value === field.state.value
-              ? "Username is available"
-              : undefined;
-          const helper = "Letters, numbers, dots and underscores";
+          const error = field.state.meta.isTouched
+            ? (toFieldError(field.state.meta.errors) ?? serverErrors.username)
+            : undefined;
 
           return (
             <Field data-invalid={error ? true : undefined}>
@@ -243,13 +214,7 @@ export function SignupForm() {
                 autoCapitalize="none"
                 spellCheck={false}
                 aria-invalid={error ? true : undefined}
-                aria-describedby={
-                  error
-                    ? `${field.name}-error`
-                    : success
-                      ? `${field.name}-success`
-                      : `${field.name}-helper`
-                }
+                aria-describedby={error ? `${field.name}-error` : undefined}
                 value={field.state.value}
                 onChange={(e) => {
                   if (serverErrors.username) {
@@ -262,43 +227,26 @@ export function SignupForm() {
                 }}
                 onBlur={field.handleBlur}
               />
-              {helper && !error && !success ? (
+              {!error ? (
                 <FieldDescription id={`${field.name}-helper`}>
-                  {helper}
+                  {"Letters, numbers, dots and underscores"}
                 </FieldDescription>
-              ) : null}
-              {success ? (
-                <FieldDescription
-                  id={`${field.name}-success`}
-                  className={cn(
-                    "flex items-center gap-1.5 text-emerald-600 dark:text-emerald-500",
-                    messageAnimation,
-                  )}
-                >
-                  <CircleCheck className="size-3.5" />
-                  {success}
-                </FieldDescription>
-              ) : null}
-              {error ? (
+              ) : (
                 <FieldError
                   id={`${field.name}-error`}
                   className={messageAnimation}
                 >
                   {error}
                 </FieldError>
-              ) : null}
+              )}
             </Field>
           );
         }}
       </form.Field>
 
-      <form.Field
-        name="password"
-        validators={{ onChange: signupSchema.shape.password }}
-      >
+      <form.Field name="password">
         {(field) => {
-          const error = field.state.meta.errors[0]?.message;
-          const helper = "At least 8 characters";
+          const error = toFieldError(field.state.meta.errors);
 
           return (
             <Field data-invalid={error ? true : undefined}>
@@ -310,11 +258,7 @@ export function SignupForm() {
                   autoComplete="new-password"
                   aria-invalid={error ? true : undefined}
                   aria-describedby={
-                    error
-                      ? `${field.name}-error`
-                      : helper
-                        ? `${field.name}-helper`
-                        : undefined
+                    error ? `${field.name}-error` : `${field.name}-helper`
                   }
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
@@ -322,6 +266,7 @@ export function SignupForm() {
                 />
                 <InputGroupAddon align="inline-end">
                   <InputGroupButton
+                    type="button"
                     aria-pressed={passwordVisible}
                     aria-label={
                       passwordVisible ? "Hide password" : "Show password"
@@ -332,11 +277,6 @@ export function SignupForm() {
                   </InputGroupButton>
                 </InputGroupAddon>
               </InputGroup>
-              {helper && !error ? (
-                <FieldDescription id={`${field.name}-helper`}>
-                  {helper}
-                </FieldDescription>
-              ) : null}
               {error ? (
                 <FieldError
                   id={`${field.name}-error`}
@@ -344,7 +284,11 @@ export function SignupForm() {
                 >
                   {error}
                 </FieldError>
-              ) : null}
+              ) : (
+                <FieldDescription id={`${field.name}-helper`}>
+                  {"At least 8 characters"}
+                </FieldDescription>
+              )}
             </Field>
           );
         }}
@@ -378,3 +322,4 @@ export function SignupForm() {
     </form>
   );
 }
+

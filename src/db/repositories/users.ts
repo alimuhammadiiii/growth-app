@@ -22,3 +22,4 @@ export async function usernameExists(username: string): Promise<boolean> {
 
   return existing.length > 0;
 }
+

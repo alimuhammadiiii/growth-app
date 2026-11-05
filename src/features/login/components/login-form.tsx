@@ -57,7 +57,6 @@ export function LoginForm() {
 
   return (
     <form
-      noValidate
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -169,3 +168,4 @@ export function LoginForm() {
     </form>
   );
 }
+

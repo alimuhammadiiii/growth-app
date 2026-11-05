@@ -33,3 +33,4 @@ export async function checkUsernameAvailability(
 
   return !(await usernameExists(parsed.data.toLowerCase()));
 }
+
