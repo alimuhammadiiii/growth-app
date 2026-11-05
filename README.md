@@ -48,12 +48,12 @@ These steps run the app in **local development** mode (with hot reload). For a p
    ```
 
    > [!WARNING]
-   > The database is published on host port **5433**, not the default 5432. If something else already uses port 5433, edit `docker-compose.yml` first.
+   > The database is published on host port **5440**, not the default 5432. If something else already uses port 5440, edit `docker-compose.yml` first.
 
 3. Create a `.env.local` file in the repo root (see [`.env.example`](.env.example)):
 
    ```env
-   DATABASE_URL="postgresql://app_user:app_password@localhost:5433/growth_app"
+   DATABASE_URL="postgresql://app_user:app_password@localhost:5440/growth_app"
    BETTER_AUTH_SECRET="<generate with: openssl rand -base64 32>"
    BETTER_AUTH_URL="http://localhost:3000"
    ```
