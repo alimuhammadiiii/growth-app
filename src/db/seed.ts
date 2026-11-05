@@ -59,7 +59,13 @@ async function main(): Promise<void> {
 
     const inserted = await tx
       .insert(goals)
-      .values({ userId, title: SEED.goal.title, status: SEED.goal.status })
+      .values({
+        userId,
+        title: SEED.goal.title,
+        status: SEED.goal.status,
+        startDate: SEED.goal.startDate,
+        endDate: SEED.goal.endDate,
+      })
       .returning();
 
     return { record: inserted[0], created: true };

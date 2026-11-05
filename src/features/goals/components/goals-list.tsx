@@ -3,7 +3,9 @@ import { Archive, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCalendarDate } from "../date-format";
 import type { GoalListItem, GoalStatus } from "../types";
+import { CreateGoalDialog } from "./create-goal-dialog";
 
 function StatusBadge({ status }: { status: GoalStatus }) {
   if (status === "ARCHIVED") {
@@ -48,6 +50,10 @@ function GoalCard({ goal, index }: { goal: GoalListItem; index: number }) {
           <StatusBadge status={goal.status} />
         </CardTitle>
         <p className="text-xs text-muted-foreground">
+          {formatCalendarDate(goal.startDate)} →{" "}
+          {goal.endDate ? formatCalendarDate(goal.endDate) : "Open-ended"}
+        </p>
+        <p className="text-xs text-muted-foreground/70">
           Created {goal.createdAtLabel}
         </p>
       </CardHeader>
@@ -83,20 +89,23 @@ function GoalCard({ goal, index }: { goal: GoalListItem; index: number }) {
   );
 }
 
-export function GoalsList({ goals }: { goals: GoalListItem[] }) {
+export function GoalsList({ goals, today }: { goals: GoalListItem[]; today: string }) {
   const activeCount = goals.filter((goal) => goal.status === "ACTIVE").length;
   const archivedCount = goals.length - activeCount;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 pb-12 md:gap-8 md:p-8">
-      <header className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 ease-out motion-reduce:animate-none">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-          Goals
-        </h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          {activeCount} active
-          {archivedCount > 0 ? ` · ${archivedCount} archived` : ""}
-        </p>
+      <header className="flex animate-in fade-in-0 slide-in-from-bottom-2 items-start justify-between gap-4 duration-300 ease-out motion-reduce:animate-none">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+            Goals
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {activeCount} active
+            {archivedCount > 0 ? ` · ${archivedCount} archived` : ""}
+          </p>
+        </div>
+        <CreateGoalDialog today={today} />
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2">

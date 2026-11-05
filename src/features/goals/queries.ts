@@ -24,6 +24,8 @@ export async function getGoalsList(userId: string): Promise<GoalListItem[]> {
     title: goal.title,
     status: goal.status,
     createdAtLabel: formatCreatedAt(goal.createdAt),
+    startDate: goal.startDate,
+    endDate: goal.endDate,
     activities: activities.map((activity) => ({
       id: activity.id,
       title: activity.title,

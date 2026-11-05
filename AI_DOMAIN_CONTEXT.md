@@ -218,6 +218,29 @@ User 1 ──── * Goals
 
 A user must never be able to access another user's Goal.
 
+## Goal title uniqueness
+
+A user may not have two ACTIVE Goals with the same title, compared
+case-insensitively.
+
+Examples:
+
+> "Learn English" and "learn english" are duplicates for the same user.
+
+Titles that differ only in surrounding whitespace are normalized by
+trimming before comparison.
+
+Archived Goals do not participate in this rule: a title used by an
+archived Goal may be reused by a new ACTIVE Goal.
+
+Rationale: the plan list must stay readable and unambiguous — two
+active Goals that differ only by letter case are indistinguishable to
+the user. This is a usability rule, not a domain-hierarchy rule.
+
+Enforcement: the CreateGoal use case performs a friendly pre-check,
+and a partial unique index (ACTIVE only, lower(title)) makes the rule
+race-safe at the persistence layer.
+
 ------------------------------------------------------------------------
 
 # 6. Activity

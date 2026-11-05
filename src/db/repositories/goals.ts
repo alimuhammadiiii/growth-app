@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { activities } from "@/db/schema/activities";
@@ -64,5 +64,71 @@ export function findAllGoalsWithActivities(userId: string) {
     userId,
     ["ACTIVE", "ARCHIVED"],
     ["ACTIVE", "ARCHIVED"],
+  );
+}
+
+export type CreateGoalRecord = {
+  title: string;
+  startDate: string;
+  endDate: string | null;
+};
+
+export type CreateGoalRecordResult =
+  | { ok: true; goal: typeof goals.$inferSelect }
+  | { ok: false; code: "DUPLICATE_TITLE" };
+
+/**
+ * Whether the user already has an ACTIVE goal with this title, compared
+ * case-insensitively. Archived titles are intentionally reusable.
+ */
+export async function goalTitleExists(
+  userId: string,
+  title: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: goals.id })
+    .from(goals)
+    .where(
+      and(
+        eq(goals.userId, userId),
+        eq(goals.status, "ACTIVE"),
+        sql`lower(${goals.title}) = ${title.toLowerCase()}`,
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
+}
+
+/**
+ * Inserts a goal. The partial unique index makes duplicate ACTIVE titles
+ * (case-insensitive) impossible even under concurrency
+ * (23505 → DUPLICATE_TITLE).
+ */
+export async function createGoal(
+  userId: string,
+  record: CreateGoalRecord,
+): Promise<CreateGoalRecordResult> {
+  try {
+    const [goal] = await db
+      .insert(goals)
+      .values({ userId, ...record })
+      .returning();
+
+    return { ok: true, goal };
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { ok: false, code: "DUPLICATE_TITLE" };
+    }
+    throw error;
+  }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
   );
 }

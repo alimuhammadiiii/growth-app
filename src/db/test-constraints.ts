@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "./index";
 import { resolveSeedGraph, SEED, type Tx } from "./seed-data";
-import { executions, scheduleVersions } from "./schema";
+import { executions, goals, scheduleVersions } from "./schema";
 
 function pgErrorCode(error: unknown): string | null {
   let current: unknown = error;
@@ -147,6 +147,20 @@ async function main(): Promise<void> {
       ),
     );
 
+    const caseVariantTitle = reportRejection(
+      "case-variant duplicate ACTIVE goal title rejected (UNIQUE user_id + lower(title))",
+      "23505",
+      await attemptInsert((tx) =>
+        tx.insert(goals).values({
+          userId: graph.user.id,
+          title: "LEARN english",
+          status: "ACTIVE",
+          startDate: graph.goal.startDate,
+          endDate: null,
+        }),
+      ),
+    );
+
     const boundedOverlap = reportRejection(
       "overlapping schedule version rejected (EXCLUDE activity + daterange)",
       "23P01",
@@ -203,6 +217,7 @@ async function main(): Promise<void> {
     allPassed =
       duplicateExecution &&
       foreignKey &&
+      caseVariantTitle &&
       boundedOverlap &&
       openOverlap &&
       historicalAdjacent &&

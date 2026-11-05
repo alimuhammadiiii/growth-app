@@ -15,6 +15,8 @@ export const SEED = {
   goal: {
     title: "Learn English",
     status: "ACTIVE",
+    startDate: "2026-10-05",
+    endDate: null,
   },
   activity: {
     title: "Study vocabulary",

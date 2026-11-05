@@ -43,6 +43,13 @@
       "when": 1791644248733,
       "tag": "0005_drop-users-password-hash",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793856764448,
+      "tag": "0006_odd_masked_marvel",
+      "breakpoints": true
     }
   ]
 }

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Plus, Target } from "lucide-react";
+import { Target } from "lucide-react";
 
+import { localDateInTimezone } from "@/features/dashboard/date-utils";
+import { CreateGoalDialog } from "@/features/goals/components/create-goal-dialog";
 import { GoalsList } from "@/features/goals/components/goals-list";
 import { getGoalsList } from "@/features/goals/queries";
-import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyContent,
@@ -28,6 +29,8 @@ export default async function GoalsPage() {
     redirect("/login");
   }
 
+  const timezone = session.user.timezone;
+  const today = localDateInTimezone(timezone);
   const goals = await getGoalsList(session.user.id);
 
   if (goals.length === 0) {
@@ -45,18 +48,12 @@ export default async function GoalsPage() {
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button disabled>
-              <Plus />
-              Create a goal
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Goal creation is coming soon.
-            </p>
+            <CreateGoalDialog today={today} size="lg" />
           </EmptyContent>
         </Empty>
       </div>
     );
   }
 
-  return <GoalsList goals={goals} />;
+  return <GoalsList goals={goals} today={today} />;
 }

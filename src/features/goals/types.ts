@@ -14,5 +14,7 @@ export type GoalListItem = {
   title: string;
   status: GoalStatus;
   createdAtLabel: string;
+  startDate: string;
+  endDate: string | null;
   activities: GoalActivityListItem[];
 };
